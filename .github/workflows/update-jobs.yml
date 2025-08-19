@@ -1,0 +1,36 @@
+name: Update Jobs Data
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"   # weekly Sunday
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: pip install requests beautifulsoup4 pdfplumber
+
+      - name: Run scrapers
+        run: |
+          cd scraper
+          python af_scraper.py
+          python sf_scraper.py
+          python crosswalk_parser.py || true
+          python build_jobs.py
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add frontend/public/data/jobs.json
+          git commit -m "Auto-update jobs data" || echo "No changes"
+          git push
