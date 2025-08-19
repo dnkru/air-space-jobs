@@ -1,36 +1,45 @@
-name: Update Jobs Data
+name: Deploy Frontend to Pages
 
 on:
-  schedule:
-    - cron: "0 0 * * 0"   # weekly Sunday
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.10"
-
-      - name: Install deps
-        run: pip install requests beautifulsoup4 pdfplumber
-
-      - name: Run scrapers
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package.json
+      - name: Install & Build
+        working-directory: frontend
         run: |
-          cd scraper
-          python af_scraper.py
-          python sf_scraper.py
-          python crosswalk_parser.py || true
-          python build_jobs.py
+          npm ci
+          npm run build
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
 
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add frontend/public/data/jobs.json
-          git commit -m "Auto-update jobs data" || echo "No changes"
-          git push
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
